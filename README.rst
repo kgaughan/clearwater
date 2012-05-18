@@ -30,4 +30,11 @@ in an encrypted backing store. For the application to be able to access
 the backing store, an administrative user will need to provide a private
 key to allow decryption of the data.
 
+
+What's with the name?
+=====================
+
+The name is a silly joke. It may or may not change in the future if I
+think of something better, but it's fine for now.
+
 .. vim:set et tw=74:
