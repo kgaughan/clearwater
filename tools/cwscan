@@ -91,4 +91,134 @@ that the list of ciphers doesn't include any known weak ciphers, checking
 the value of PermitRootLogin, &c.
 """
 
+import ConfigParser
+from optparse import OptionParser
+from os import path
 
+
+class ParseError(StandardError):
+    """
+    Something went wrong when parsing the configuration file.
+    """
+    __slots__ = ()
+
+
+def options():
+    """
+    Create the option parser for this program.
+    """
+    parser = OptionParser()
+    parser.set_defaults(verbose=False, keys=[])
+    parser.add_option('-v', '--verbose', dest='verbose', action='store_true',
+            help='be verbose (include affirmative results in the report)')
+    parser.add_option('-c', '--config', dest='config', metavar='FILE',
+            help='configuration file specifying the scan parameters')
+    parser.add_option('-k', '--key', dest='keys', metavar='FILE',
+            action='append', help='path to private key to use for root')
+    return parser
+
+def parse_options():
+    """
+    Parse the command line arguments and read the configuration file.
+    """
+    parser = options()
+    opts, args = parser.parse_args()
+
+    error = None
+    if len(args) > 0:
+        error = 'Unexpected extra arguments'
+    elif opts.config is None:
+        error = 'No configuration file specified'
+    elif not path.isfile(path.realpath(opts.config)):
+        error = 'Specified configuration file not found'
+    else:
+        for key in opts.keys:
+            if not path.isfile(path.realpath(key)):
+                error = "Key '%s' not found" % (key,)
+                break
+    if error is not None:
+        parser.error(error)
+
+    try:
+        keys, ranges = load_config(opts.config)
+        extra_keys = load_keys(opts.keys)
+    except Exception, ex:
+        parser.error(ex)
+
+    return (keys, ranges, extra_keys, opts.verbose)
+
+def parse_key_section(section, params):
+    """
+    Parse through a key section of a configuration file.
+    """
+    blacklist = False
+    fingerprint = None
+    key_file = None
+    for key, value in params:
+        if key == 'blacklist':
+            blacklist = value in ('1', 'yes', 'true')
+        elif key == 'fingerprint':
+            fingerprint = value
+        elif key == 'key':
+            key_file = value
+    if fingerprint is None and key_file is None:
+        raise ParseError(
+            "Fingerprint and/or key required in '%s'" % section)
+    if key_file is not None and not path.isfile(path.realpath(key_file)):
+        raise ParseError(
+            "Key file in '%s' not found: '%s'" % (section, key_file))
+    return (section, (blacklist, fingerprint, key_file))
+
+def parse_cidr_range(range_):
+    """
+    Parse a textual CIDR range, turning it into an iterable object listing the
+    IP addresses within that range.
+    """
+    # NOTE: https://gist.github.com/343449
+    pass
+
+def parse_range_section(section, params):
+    """
+    Parse the range section of a configuration file.
+    """
+    _, range_spec = section.split(':', 1)
+    ranges = [parse_cidr_range(range_) for range_ in range_spec.split(',')]
+    strict = True
+    keys = {}
+    for key, value in params:
+        if key == 'strictness':
+            if key not in ('lax', 'strict'):
+                raise ParseError(
+                    "Bad strictness in '%s': '%s'" % (section, value))
+            strict = value == 'strict'
+        elif key.startswith('key:'):
+            keys[key] = frozenset(value.split(','))
+        else:
+            raise ParseError("Bad key in '%s': '%s'" % (section, key))
+    return (section, ranges, strict, keys)
+
+def load_config(config_path):
+    """
+    Load the configuration file and check it for basic consistency.
+    """
+    parser = ConfigParser.RawConfigParser()
+    parser.read(config_path)
+    keys = []
+    ranges = []
+
+    for section in parser.sections():
+        params = parser.items(section)
+        if section.startswith('key:'):
+            keys.append(parse_key_section(section, params))
+        elif section.startswith('range:'):
+            ranges.append(parse_range_section(section, params))
+        else:
+            raise ParseError("Unknown section: '%s'" % section)
+    return (keys, ranges)
+
+def load_keys(key_paths):
+    return []
+
+
+if __name__ == '__main__':
+    parse_options()
