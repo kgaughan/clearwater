@@ -1,7 +1,11 @@
-flask
+argh==0.15
+Flask==0.8
+Flask-SQLAlchemy==0.16
+Flask-WTF==0.6
 gpgme
+IPy
 lxml
 oauth2
 paramiko
 pyasn1
-IPy
+SQLAlchemy==0.7.8
